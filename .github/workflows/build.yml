@@ -1,0 +1,65 @@
+
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Extract Android project
+        run: |
+          ZIP_FILE="$(find . -maxdepth 1 -type f -iname '*.zip' -print -quit)"
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "No ZIP file found in repository root."
+            exit 1
+          fi
+
+          mkdir extracted
+          unzip -q "$ZIP_FILE" -d extracted
+
+          SETTINGS_FILE="$(find extracted -type f -name settings.gradle.kts -print -quit)"
+
+          if [ -z "$SETTINGS_FILE" ]; then
+            echo "settings.gradle.kts was not found inside the ZIP."
+            exit 1
+          fi
+
+          PROJECT_DIR="$(dirname "$SETTINGS_FILE")"
+
+          if [ ! -d "$PROJECT_DIR/app" ]; then
+            echo "The extracted project has no app folder."
+            exit 1
+          fi
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Build APK
+        run: gradle -p "$PROJECT_DIR" assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LiquidGlass-debug-apk
+          path: extracted/**/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
