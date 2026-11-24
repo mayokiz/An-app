@@ -54,6 +54,10 @@ jobs:
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
+      - name: Fix dependencies
+        run: |
+          sed -i 's/backdrop:2.0.1/backdrop:1.0.6/' "$PROJECT_DIR/app/build.gradle.kts"
+
       - name: Build APK
         run: gradle -p "$PROJECT_DIR" assembleDebug
 
