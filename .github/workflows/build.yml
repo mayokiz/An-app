@@ -54,9 +54,23 @@ jobs:
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Fix dependencies
+      - name: Fix dependencies and JVM targets
         run: |
           sed -i 's/backdrop:2.0.1/backdrop:1.0.6/' "$PROJECT_DIR/app/build.gradle.kts"
+
+          sed -i '/android {/a\
+              compileOptions {\
+                  sourceCompatibility = JavaVersion.VERSION_17\
+                  targetCompatibility = JavaVersion.VERSION_17\
+              }' "$PROJECT_DIR/app/build.gradle.kts"
+
+          sed -i '/plugins {/a\
+              id("org.jetbrains.kotlin.android")' "$PROJECT_DIR/app/build.gradle.kts"
+
+          sed -i '/android {/a\
+              kotlinOptions {\
+                  jvmTarget = "17"\
+              }' "$PROJECT_DIR/app/build.gradle.kts"
 
       - name: Build APK
         run: gradle -p "$PROJECT_DIR" assembleDebug
