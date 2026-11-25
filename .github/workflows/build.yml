@@ -58,6 +58,7 @@ jobs:
         run: |
           ROOT="$PROJECT_DIR/build.gradle.kts"
           APP="$PROJECT_DIR/app/build.gradle.kts"
+          SRC="$PROJECT_DIR/app/src/main/java/com/example/liquidglass/MainActivity.kt"
 
           sed -i 's/backdrop:2.0.1/backdrop:1.0.6/' "$APP"
 
@@ -81,6 +82,29 @@ jobs:
               jvmToolchain(17)
           }
           EOF
+
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          p = Path(os.environ["PROJECT_DIR"]) / "app/src/main/java/com/example/liquidglass/MainActivity.kt"
+          s = p.read_text()
+
+          s = s.replace(
+              "import com.kyant.shapes.RoundedRectangle",
+              "import androidx.compose.foundation.shape.RoundedCornerShape"
+          )
+          s = s.replace("RoundedRectangle(28.dp)", "RoundedCornerShape(28.dp)")
+
+          marker = "fun GlassPanel("
+          head, sep, tail = s.partition(marker)
+
+          if not sep:
+              raise SystemExit("GlassPanel function not found")
+
+          tail = tail.replace("    Box(\n", "    Column(\n", 1)
+          p.write_text(head + sep + tail)
+          PY
 
       - name: Build APK
         run: gradle -p "$PROJECT_DIR" assembleDebug
