@@ -1,4 +1,3 @@
-
 name: Build Actual Kyant0 Android App
 
 on:
@@ -24,13 +23,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses
 
       - name: Install Android SDK 37
-        run: |
-          sdkmanager "platforms;android-37" "build-tools;37.0.0"
-          yes | sdkmanager --licenses
+        run: sdkmanager "platforms;android-37" "build-tools;37.0.0"
 
       - name: Clone actual Kyant0 repository
         run: |
@@ -40,7 +37,7 @@ jobs:
       - name: Verify actual Android app module
         run: |
           test -f upstream/androidApp/build.gradle.kts
-          grep -q 'applicationId = "com.kyant.backdrop.catalog"' \
+          grep -q 'com.kyant.backdrop.catalog' \
             upstream/androidApp/build.gradle.kts
 
       - name: Build actual Kyant0 APK
@@ -54,7 +51,7 @@ jobs:
           APK=$(find upstream/androidApp/build/outputs/apk/debug \
             -name '*.apk' -print -quit)
           test -n "$APK"
-          $ANDROID_HOME/build-tools/37.0.0/aapt dump badging "$APK" \
+          "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$APK" \
             | grep "package: name='com.kyant.backdrop.catalog'"
 
       - name: Upload actual Kyant0 APK
