@@ -1,3 +1,4 @@
+
 name: Build Android APK
 
 on:
@@ -23,14 +24,14 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.11.1'
+          gradle-version: '9.3.0'
 
       - name: Extract Android project
         run: |
           ZIP_FILE="$(find . -maxdepth 1 -type f -iname '*.zip' -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "No ZIP file found in repository root."
+            echo "No ZIP file found."
             exit 1
           fi
 
@@ -40,33 +41,46 @@ jobs:
           SETTINGS_FILE="$(find extracted -type f -name settings.gradle.kts -print -quit)"
 
           if [ -z "$SETTINGS_FILE" ]; then
-            echo "settings.gradle.kts was not found inside the ZIP."
+            echo "settings.gradle.kts not found."
             exit 1
           fi
 
           PROJECT_DIR="$(dirname "$SETTINGS_FILE")"
 
           if [ ! -d "$PROJECT_DIR/app" ]; then
-            echo "The extracted project has no app folder."
+            echo "App folder not found."
             exit 1
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Fix dependencies and JVM targets
+      - name: Fix project compatibility
         run: |
-          sed -i 's/backdrop:2.0.1/backdrop:1.0.6/' "$PROJECT_DIR/app/build.gradle.kts"
+          ROOT="$PROJECT_DIR/build.gradle.kts"
+          APP="$PROJECT_DIR/app/build.gradle.kts"
+
+          sed -i 's/backdrop:2.0.1/backdrop:1.0.6/' "$APP"
+
+          sed -i \
+            -e 's/version "8.9.2"/version "9.0.0"/g' \
+            -e 's/version "2.1.20"/version "2.3.10"/g' \
+            -e '/id("org.jetbrains.kotlin.android")/d' \
+            "$ROOT"
+
+          sed -i '/id("org.jetbrains.kotlin.android")/d' "$APP"
 
           sed -i '/android {/a\
               compileOptions {\
                   sourceCompatibility = JavaVersion.VERSION_17\
                   targetCompatibility = JavaVersion.VERSION_17\
-              }' "$PROJECT_DIR/app/build.gradle.kts"
+              }' "$APP"
 
-          sed -i '/android {/a\
-              kotlinOptions {\
-                  jvmTarget = "17"\
-              }' "$PROJECT_DIR/app/build.gradle.kts"
+          cat >> "$APP" <<'EOF'
+
+          kotlin {
+              jvmToolchain(17)
+          }
+          EOF
 
       - name: Build APK
         run: gradle -p "$PROJECT_DIR" assembleDebug
