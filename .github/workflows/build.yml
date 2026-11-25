@@ -1,124 +1,65 @@
 
-name: Build Android APK
+name: Build Actual Kyant0 Android App
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - main
+      - kyant0-library
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout workflow repository
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '9.3.0'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Extract Android project
+      - name: Install Android SDK 37
         run: |
-          ZIP_FILE="$(find . -maxdepth 1 -type f -iname '*.zip' -print -quit)"
+          sdkmanager "platforms;android-37" "build-tools;37.0.0"
+          yes | sdkmanager --licenses
 
-          if [ -z "$ZIP_FILE" ]; then
-            echo "No ZIP file found."
-            exit 1
-          fi
-
-          mkdir extracted
-          unzip -q "$ZIP_FILE" -d extracted
-
-          SETTINGS_FILE="$(find extracted -type f -name settings.gradle.kts -print -quit)"
-
-          if [ -z "$SETTINGS_FILE" ]; then
-            echo "settings.gradle.kts not found."
-            exit 1
-          fi
-
-          PROJECT_DIR="$(dirname "$SETTINGS_FILE")"
-
-          if [ ! -d "$PROJECT_DIR/app" ]; then
-            echo "App folder not found."
-            exit 1
-          fi
-
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-
-      - name: Fix project compatibility
+      - name: Clone actual Kyant0 repository
         run: |
-          ROOT="$PROJECT_DIR/build.gradle.kts"
-          APP="$PROJECT_DIR/app/build.gradle.kts"
+          git clone --depth 1 --branch kmp \
+            https://github.com/Kyant0/AndroidLiquidGlass.git upstream
 
-          sed -i 's/backdrop:2.0.1/backdrop:1.0.6/' "$APP"
+      - name: Verify actual Android app module
+        run: |
+          test -f upstream/androidApp/build.gradle.kts
+          grep -q 'applicationId = "com.kyant.backdrop.catalog"' \
+            upstream/androidApp/build.gradle.kts
 
-          sed -i \
-            -e 's/version "8.9.2"/version "9.0.0"/g' \
-            -e 's/version "2.1.20"/version "2.3.10"/g' \
-            -e '/id("org.jetbrains.kotlin.android")/d' \
-            "$ROOT"
+      - name: Build actual Kyant0 APK
+        working-directory: upstream
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon :androidApp:assembleDebug
 
-          sed -i '/id("org.jetbrains.kotlin.android")/d' "$APP"
+      - name: Verify APK package
+        run: |
+          APK=$(find upstream/androidApp/build/outputs/apk/debug \
+            -name '*.apk' -print -quit)
+          test -n "$APK"
+          $ANDROID_HOME/build-tools/37.0.0/aapt dump badging "$APK" \
+            | grep "package: name='com.kyant.backdrop.catalog'"
 
-          sed -i '/android {/a\
-              compileOptions {\
-                  sourceCompatibility = JavaVersion.VERSION_17\
-                  targetCompatibility = JavaVersion.VERSION_17\
-              }' "$APP"
-
-          cat >> "$APP" <<'EOF'
-
-          kotlin {
-              jvmToolchain(17)
-          }
-          EOF
-
-          python3 - <<'PY'
-          import os
-          from pathlib import Path
-
-          p = Path(os.environ["PROJECT_DIR"]) / "app/src/main/java/com/example/liquidglass/MainActivity.kt"
-          s = p.read_text()
-
-          # Remove the old Shapes import.
-          # Keep the existing Compose RoundedCornerShape import.
-          s = s.replace(
-              "import com.kyant.shapes.RoundedRectangle",
-              ""
-          )
-
-          s = s.replace(
-              "RoundedRectangle(28.dp)",
-              "RoundedCornerShape(28.dp)"
-          )
-
-          marker = "fun GlassPanel("
-          head, sep, tail = s.partition(marker)
-
-          if not sep:
-              raise SystemExit("GlassPanel function not found")
-
-          # GlassPanel uses verticalArrangement, so it must be a Column.
-          tail = tail.replace("    Box(\n", "    Column(\n", 1)
-
-          p.write_text(head + sep + tail)
-          PY
-
-      - name: Build APK
-        run: gradle -p "$PROJECT_DIR" assembleDebug
-
-      - name: Upload APK
+      - name: Upload actual Kyant0 APK
         uses: actions/upload-artifact@v4
         with:
-          name: LiquidGlass-debug-apk
-          path: extracted/**/app/build/outputs/apk/debug/*.apk
+          name: ACTUAL-KYANT0-ANDROID-APP
+          path: upstream/androidApp/build/outputs/apk/debug/*.apk
           if-no-files-found: error
